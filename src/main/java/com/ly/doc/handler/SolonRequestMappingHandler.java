@@ -20,17 +20,21 @@
  */
 package com.ly.doc.handler;
 
+import com.ly.doc.builder.ProjectDocConfigBuilder;
 import com.ly.doc.constants.DocAnnotationConstants;
+import com.ly.doc.constants.Methods;
 import com.ly.doc.constants.SolonAnnotations;
 import com.ly.doc.function.RequestMappingFunc;
-import com.ly.doc.utils.DocUtil;
-import com.ly.doc.builder.ProjectDocConfigBuilder;
-import com.ly.doc.constants.Methods;
 import com.ly.doc.model.annotation.FrameworkAnnotations;
 import com.ly.doc.model.request.RequestMapping;
+import com.ly.doc.utils.DocUtil;
+import com.power.common.util.StringUtil;
 import com.thoughtworks.qdox.model.JavaAnnotation;
+import com.thoughtworks.qdox.model.JavaClass;
 import com.thoughtworks.qdox.model.JavaMethod;
+import com.thoughtworks.qdox.model.expression.AnnotationValue;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 
@@ -42,6 +46,8 @@ import static com.ly.doc.constants.DocTags.IGNORE;
  */
 public class SolonRequestMappingHandler implements IRequestMappingHandler {
 
+    public final HashMap<String, String> gatewayPrefix = new HashMap<>();
+
     /**
      * handle solon request mapping
      *
@@ -51,14 +57,34 @@ public class SolonRequestMappingHandler implements IRequestMappingHandler {
      * @return RequestMapping
      */
     public RequestMapping handle(ProjectDocConfigBuilder projectBuilder,
-        String controllerBaseUrl,
-        JavaMethod method, FrameworkAnnotations frameworkAnnotations,
-        RequestMappingFunc requestMappingFunc) {
+                                 String controllerBaseUrl,
+                                 JavaMethod method, FrameworkAnnotations frameworkAnnotations,
+                                 RequestMappingFunc requestMappingFunc) {
         if (Objects.nonNull(method.getTagByName(IGNORE))) {
             return null;
         }
+        // 判断是否在网关中
+        if (!gatewayPrefix.isEmpty()) {
+            // 项目是含网关项目
+            JavaClass declaringClass = method.getDeclaringClass();
+            List<JavaAnnotation> annotations = declaringClass.getAnnotations();
+            for (JavaAnnotation annotation : annotations) {
+                if (SolonAnnotations.COMPONENT_FULL.equals(annotation.getType().getFullyQualifiedName())) {
+                    // 获取
+                    AnnotationValue tag = annotation.getProperty("tag");
+                    if (tag != null) {
+                        Object value = tag.getParameterValue();
+                        String string = gatewayPrefix.get(value.toString().replaceAll("\"", ""));
+                        if (StringUtil.isEmpty(controllerBaseUrl)) {
+                            controllerBaseUrl = string;
+                        }
+                    }
+                }
+            }
+        }
+
         List<JavaAnnotation> annotations = getAnnotations(method);
-        String methodType = "GET";//default is get
+        String methodType = "GET";// default is get
         String shortUrl = null;
         String mediaType = null;
         boolean deprecated = false;
@@ -90,10 +116,10 @@ public class SolonRequestMappingHandler implements IRequestMappingHandler {
             deprecated = true;
         }
         RequestMapping requestMapping = RequestMapping.builder()
-            .setMediaType(mediaType)
-            .setMethodType(methodType)
-            .setDeprecated(deprecated)
-            .setShortUrl(shortUrl);
+                .setMediaType(mediaType)
+                .setMethodType(methodType)
+                .setDeprecated(deprecated)
+                .setShortUrl(shortUrl);
         requestMapping = formatMappingData(projectBuilder, controllerBaseUrl, requestMapping);
         requestMappingFunc.process(method.getDeclaringClass(), requestMapping);
         return requestMapping;

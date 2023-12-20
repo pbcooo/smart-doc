@@ -137,4 +137,10 @@ public interface DocTags {
      * dubbo service name
      */
     String SERVICE = "service";
+
+
+    /**
+     * solon gateway
+     */
+    String GATEWAY = "gateway";
 }
